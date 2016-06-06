@@ -248,7 +248,7 @@ class DatabaseDriver implements MappingDriver
                 }
 
                 $metadata->mapManyToMany($associationMapping);
-
+                
                 break;
             }
         }
@@ -319,18 +319,20 @@ class DatabaseDriver implements MappingDriver
         $tableName = $metadata->table['name'];
         $indexes   = $this->tables[$tableName]->getIndexes();
 
-        foreach ($indexes as $index) {
+        foreach($indexes as $index){
             if ($index->isPrimary()) {
                 continue;
             }
 
             $indexName      = $index->getName();
             $indexColumns   = $index->getColumns();
+            $options        = $index->getOptions();
             $constraintType = $index->isUnique()
                 ? 'uniqueConstraints'
                 : 'indexes';
 
             $metadata->table[$constraintType][$indexName]['columns'] = $indexColumns;
+            $metadata->table[$constraintType][$indexName]['options'] = $options;
         }
     }
 
@@ -479,6 +481,51 @@ class DatabaseDriver implements MappingDriver
                 $metadata->mapManyToOne($associationMapping);
             }
         }
+        
+        foreach ($this->tables as $tableCandidate) {
+            if ($this->_sm->getDatabasePlatform()->supportsForeignKeyConstraints()) {
+                $foreignKeysCandidate = $tableCandidate->getForeignKeys();
+            } else {
+                $foreignKeysCandidate = array();
+            }
+        
+            foreach ($foreignKeysCandidate as $foreignKey) {
+                $foreignTable = $foreignKey->getForeignTableName();
+        
+                if ($foreignTable == $tableName && !isset($this->manyToManyTables[$tableCandidate->getName()])) {
+        
+                    $fkCols = $foreignKey->getForeignColumns();
+                    $cols = $foreignKey->getColumns();
+        
+        
+                    $localColumn = current($cols);
+        
+                    $associationMapping = array();
+                    $associationMapping['fieldName'] = $this->getFieldNameForColumn($tableCandidate->getName(), $tableCandidate->getName(), true);
+                    $associationMapping['targetEntity'] = $this->getClassNameForTable($tableCandidate->getName());
+                    $associationMapping['mappedBy'] = $this->getFieldNameForColumn($tableCandidate->getName(), $localColumn, true);
+        
+                    foreach ($metadata->associationMappings as $fieldName=>&$v) {
+                        if ($fieldName == $associationMapping['fieldName']) {
+                            $associationMapping['fieldName'] .= ucfirst(strstr($localColumn, '_', true));
+                            $v['fieldName'] .= ucfirst($v['mappedBy']);
+                        }
+                    }
+        
+                    try {
+                        $primaryKeyColumns = $tableCandidate->getPrimaryKey()->getColumns();
+                        if (count($primaryKeyColumns) == 1) {
+                            $indexColumn = current($primaryKeyColumns);
+                            $associationMapping['indexBy'] = $indexColumn;
+                        }
+                    } catch (SchemaException $e) {
+        
+                    }
+        
+                    $metadata->mapOneToMany($associationMapping);
+                }
+            }
+        }
     }
 
     /**
@@ -506,7 +553,7 @@ class DatabaseDriver implements MappingDriver
     {
         try {
             return $table->getPrimaryKey()->getColumns();
-        } catch (SchemaException $e) {
+        } catch(SchemaException $e) {
             // Do nothing
         }
 
@@ -550,7 +597,6 @@ class DatabaseDriver implements MappingDriver
         if ($fk) {
             $columnName = str_replace('_id', '', $columnName);
         }
-
         return Inflector::camelize($columnName);
     }
 }

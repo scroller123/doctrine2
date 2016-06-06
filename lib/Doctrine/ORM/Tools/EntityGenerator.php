@@ -157,15 +157,13 @@ class EntityGenerator
         Type::DATE          => '\DateTime',
         Type::TIME          => '\DateTime',
         Type::OBJECT        => '\stdClass',
-        Type::INTEGER       => 'int',
-        Type::BIGINT        => 'int',
-        Type::SMALLINT      => 'int',
+        Type::BIGINT        => 'integer',
+        Type::SMALLINT      => 'integer',
         Type::TEXT          => 'string',
         Type::BLOB          => 'string',
         Type::DECIMAL       => 'string',
         Type::JSON_ARRAY    => 'array',
         Type::SIMPLE_ARRAY  => 'array',
-        Type::BOOLEAN       => 'bool',
     );
 
     /**
@@ -279,12 +277,10 @@ public function <methodName>(<methodTypeHint>$<variableName>)
  * <description>
  *
  * @param <variableType> $<variableName>
- *
- * @return boolean TRUE if this collection contained the specified element, FALSE otherwise.
  */
 public function <methodName>(<methodTypeHint>$<variableName>)
 {
-<spaces>return $this-><fieldName>->removeElement($<variableName>);
+<spaces>$this-><fieldName>->removeElement($<variableName>);
 }';
 
     /**
@@ -1098,9 +1094,16 @@ public function __construct(<params>)
             foreach ($constraint['columns'] as $column) {
                 $columns[] = '"' . $column . '"';
             }
-            $annotations[] = '@' . $this->annotationsPrefix . $constraintName . '(name="' . $name . '", columns={' . implode(', ', $columns) . '})';
+            if (is_array($constraint['options']) && count($constraint['options'])) {
+                $options = ', options={';
+                foreach ($constraint['options'] as $key=>$value)
+                    $options .= '"' . $key . '": "' . $value . '"';
+                $options .= '}';
+            }
+            
+            $annotations[] = '@' . $this->annotationsPrefix . $constraintName . '(name="' . $name . '", columns={' . implode(', ', $columns) . '}' . $options . ')';
+//             $annotations[] = '@' . $this->annotationsPrefix . $constraintName . '(name="' . $name . '", columns={' . implode(', ', $columns) . '})';
         }
-
         return implode(', ', $annotations);
     }
 
@@ -1242,7 +1245,7 @@ public function __construct(<params>)
         }
 
         foreach ($joinColumns as $joinColumn) {
-            if (isset($joinColumn['nullable']) && !$joinColumn['nullable']) {
+            if(isset($joinColumn['nullable']) && !$joinColumn['nullable']) {
                 return false;
             }
         }
@@ -1661,9 +1664,11 @@ public function __construct(<params>)
             if (isset($fieldMapping['options']['unsigned']) && $fieldMapping['options']['unsigned']) {
                 $options[] = '"unsigned"=true';
             }
-
+    
             if ($options) {
                 $column[] = 'options={'.implode(',', $options).'}';
+//             if (isset($fieldMapping['unsigned']) && $fieldMapping['unsigned']) {
+//                 $column[] = 'options={"unsigned"=true}';
             }
 
             if (isset($fieldMapping['columnDefinition'])) {
@@ -1812,14 +1817,12 @@ public function __construct(<params>)
      * Exports (nested) option elements.
      *
      * @param array $options
-     *
-     * @return string
      */
     private function exportTableOptions(array $options)
     {
         $optionsStr = array();
 
-        foreach ($options as $name => $option) {
+        foreach($options as $name => $option) {
             if (is_array($option)) {
                 $optionsStr[] = '"' . $name . '"={' . $this->exportTableOptions($option) . '}';
             } else {
